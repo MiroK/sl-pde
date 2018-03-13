@@ -302,18 +302,17 @@ int main(){
   GPoint ll = {0.2, 0.2, 0.2};
   GPoint ur = {0.8, 0.8, 0.8};
   Probe probe = {ll, ur, 4, 3, 5};
-  
-  init_grid(1 << 5);
 
-  double value;
+  // Quite large!
+  init_grid(1 << 8);
+
   foreach(){
-    value = funcint(x, y, z);
-    field.x[] = value;
-    field.y[] = 2 + value;
-    field.z[] = 2*value;
+    field.x[] = x;
+    field.y[] = -y;
+    field.z[] = 2*z;
 
-    foo[] = 1 - value;
-    bar[] = 10 * value;
+    foo[] = x + y + z;
+    bar[] = x + 2*y + 3*z;
   }
 
   sprintf(path, "sine_0.vtk");  

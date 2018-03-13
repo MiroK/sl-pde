@@ -2,6 +2,5 @@
 
 *** Structure
     - `/src/c` is the C code related to Basilisk data generation
-    - `/src/python` is the python code for data generation in FEniCS and
-    sparse learning
+    - `/src/python` is the python code for data generation in FEniCS and sparse learning
 
