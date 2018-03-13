@@ -47,8 +47,10 @@ def read_vtk(path):
 
         # Finally vector
         if line.startswith('VECTORS'):
-            # VECTORS field.x type -> VECTORS, field, x type
-            _, field_name, _, _ = word_pattern.findall(line)
+            # This is 
+            # VECTORS field.x type -> VECTORS, field, x type (basilisk)
+            # or                      VECTORS, fiel, type (fenics)
+            field_name = word_pattern.findall(line)[1]
             
             data[field_name] = read_data(lines, nx, ny, nz, 3)
             continue

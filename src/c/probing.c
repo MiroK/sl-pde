@@ -57,7 +57,7 @@ void write_probedata_vtk(double** data, Probe probe, scalar* scalar_fields, vect
       for(int i = 0; i < probe.nx; i++){
         x = probe.ll.x + i*dx;
 
-        fprintf (fp, "%g %g %g\n", x, y, z);
+        fprintf (fp, "%.16f %.16f %.16f\n", x, y, z);
       }
     }
   }
@@ -69,7 +69,7 @@ void write_probedata_vtk(double** data, Probe probe, scalar* scalar_fields, vect
     fprintf (fp, "SCALARS %s double\n", field.name);
     fputs ("LOOKUP_TABLE default\n", fp);
     for(int col=0; col<ncols; col++){
-      fprintf(fp, "%g\n", data[row_index][col]);
+      fprintf(fp, "%.16f\n", data[row_index][col]);
     }
     row_index += 1;
   }
@@ -77,7 +77,7 @@ void write_probedata_vtk(double** data, Probe probe, scalar* scalar_fields, vect
   for(vector field in vector_fields){
     fprintf (fp, "VECTORS %s double\n", field.x.name);
     for(int col=0; col<ncols; col++){
-      fprintf(fp, "%g %g %g\n", data[row_index][col], data[row_index+1][col], data[row_index+2][col]);
+      fprintf(fp, "%.16f %.16f %.16f\n", data[row_index][col], data[row_index+1][col], data[row_index+2][col]);
     }
     row_index += 3;
   }
