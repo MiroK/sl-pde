@@ -1,0 +1,27 @@
+Python 2.7.12 (default, Dec  4 2017, 14:50:18) 
+[GCC 5.4.0 20160609] on linux2
+Type "help", "copyright", "credits" or "license" for more information.
+>>> python.el: native completion setup loaded
+>>> import re
+>>> re.compile(r'\W+ [0-9]+ [0-9]+ [0-9]+')
+<_sre.SRE_Pattern object at 0x7f590ec29510>
+>>> pattern = re.compile(r'\W+ [0-9]+ [0-9]+ [0-9]+')
+>>> pattern.match('POINTS 1 4 2')
+>>> pattern.findall('POINTS 1 4 2')
+[]
+>>> re.compile(r'\W+')
+<_sre.SRE_Pattern object at 0x7f590eb6bd40>
+>>> pattern = re.compile(r'\W+')
+>>> pattern.findall('POINTS 1 4 2')
+[' ', ' ', ' ']
+>>> pattern = re.compile(r'(\W)+')
+>>> pattern.findall('POINTS 1 4 2')
+[' ', ' ', ' ']
+>>> pattern = re.compile(r'[0-9]+')
+>>> pattern.findall('POINTS 1 4 2')
+['1', '4', '2']
+>>> pattern.findall('POINTS 13 44 21')
+['13', '44', '21']
+>>> pattern.findall('DISM 10 xx')
+['10']
+>>> 
