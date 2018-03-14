@@ -87,14 +87,19 @@ if __name__ == '__main__':
     grid = zip(*(xi.flatten() for xi in data['grid']))
 
     foo = (data['foo'][0]).flatten()
-    assert max(abs(value - (x+y+z)) for ((x, y, z), value) in zip(grid, foo)) < 1E-15
+    error = [abs(value - (x+y+z)) for ((x, y, z), value) in zip(grid, foo)]
+    assert max(error) < 5E-15, (error, max(error))
+
     
     bar = (data['bar'][0]).flatten()
-    assert max(abs(value - (x+2*y+3*z)) for ((x, y, z), value) in zip(grid, bar)) < 1E-15
+    error = [abs(value - (x+2*y+3*z)) for ((x, y, z), value) in zip(grid, bar)]
+    assert max(error) < 5E-15, (error, max(error))
 
     field = zip(*(xi.flatten() for xi in data['field']))
-    assert max(np.linalg.norm(np.array([x, -y, 2*z]) - np.array(value))
-               for ((x, y, z), value) in zip(grid, field)) < 1E-15
+    error = [np.linalg.norm(np.array([x, -y, 2*z]) - np.array(value))
+             for ((x, y, z), value) in zip(grid, field)]
+    assert max(error) < 5E-15, (error, max(error))
+
 
     # When we do piecewise constant interpolation there are bound to be
     # some differences but should be small
@@ -103,11 +108,14 @@ if __name__ == '__main__':
     grid = zip(*(xi.flatten() for xi in data['grid']))
 
     foo = (data['foo'][0]).flatten()
-    assert max(abs(value - (x+y+z)) for ((x, y, z), value) in zip(grid, foo)) < 2E-2
+    error = [abs(value - (x+y+z)) for ((x, y, z), value) in zip(grid, foo)]
+    assert max(error) < 5E-2, (error, max(error))
     
     bar = (data['bar'][0]).flatten()
-    assert max(abs(value - (x+2*y+3*z)) for ((x, y, z), value) in zip(grid, bar)) < 2E-2
+    error = [abs(value - (x+2*y+3*z)) for ((x, y, z), value) in zip(grid, bar)]
+    assert max(error) < 5E-2, (error, max(error))
 
     field = zip(*(xi.flatten() for xi in data['field']))
-    assert max(np.linalg.norm(np.array([x, -y, 2*z]) - np.array(value))
-               for ((x, y, z), value) in zip(grid, field)) < 2E-2
+    error = [np.linalg.norm(np.array([x, -y, 2*z]) - np.array(value))
+             for ((x, y, z), value) in zip(grid, field)]
+    assert max(error) < 5E-2, (error, max(error))

@@ -394,7 +394,7 @@ void * array_shrink (Array * a)
 
 
 
-#if TRACE == 1
+#if 2 == 1
 #include <extrae_user_events.h>
 
 typedef struct {
@@ -482,7 +482,7 @@ static void trace_off()
 # define trace(func, file, line) trace_push (&trace_func, func)
 # define end_trace(func, file, line) trace_pop (&trace_func, func)
 
-#elif TRACE
+#elif 2
 
 typedef struct {
   char * func, * file;
@@ -1375,6 +1375,11 @@ void matrix_free (void * m)
 }
 #line 13 "probing-cpp.c"
 #line 1 "probing.c"
+#line 1 "probing.h"
+#line 1 "./probing.h"
+
+
+
 #line 1 "grid/octree.h"
 #line 1 "/home/miro3/Documents/Programming/basilisk/src/grid/octree.h"
 
