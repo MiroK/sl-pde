@@ -1,3 +1,8 @@
+# Data from simulations are some values for each point in the spatial
+# domain and time slices. This space-time domain is thus a hypercube.
+# The idea here is to definesome functional representation of the data
+# which can be evaluated, combined (+, -) and differentaited.
+
 from numpy.polynomial.chebyshev import Chebyshev
 import numpy as np
 

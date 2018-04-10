@@ -4421,7 +4421,7 @@ void free_solver()
   pfree (_constant,__func__,__FILE__,__LINE__); _constant = NULL;
   free_grid();
   qpclose_all();
-#if TRACE
+#if 2
   trace_off();
 #endif
 #if MTRACE
