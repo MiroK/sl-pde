@@ -12,7 +12,7 @@ class GridFunction(object):
     Representation of a function defined on a Cartesian domain. The domain 
     is time interval x {spatial intervals}.
     '''
-    def __init__(self, grid, data, name='u'):
+    def __init__(self, grid, data):
         '''Grid is a tensor product of intervals'''
         assert len(grid) == len(data.shape), (len(grid), len(data.shape))
         assert map(len, grid) == list(data.shape), (map(len, grid), list(data.shape)) 
@@ -20,7 +20,6 @@ class GridFunction(object):
         self.grid = grid
         self.dim = len(grid)  # The space time dimension
         self.data = data
-        self.__name__ = name  # For expression printing
 
     def __call__(self, point):
         '''The value at a space-time point reffered to by its indices'''
@@ -78,6 +77,9 @@ def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
             # Now we can compute the interpolant of degree and take its
             # derivative at 'p' - it's only the Xi that matters
             return interpolant.fit(x, y, d).deriv(n)(Xi[index_i])
+        # Still a grid function like
+        foo.dim = func.dim
+        foo.grid = X
         return foo
 
     # I want the highest derivative to be computed from the data
@@ -96,138 +98,3 @@ def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
     
     func.__name__ = name
     return func
-
-
-def add(f, g):
-    op = lambda p, f=f, g=g: f(p) + g(p)
-    op.name = '(%s + %s)' % (f.__name__, g.__name__)
-    return op
-
-
-def sub(f, g):
-    op = lambda p, f=f, g=g: f(p) - g(p)
-    op.__name__ = '(%s - %s)' % (f.__name__, g.__name__)
-    return op
-
-    
-def prod(f, g):
-    op = lambda p, f=f, g=g: f(p) * g(p)
-    op.__name__ = '(%s * %s)' % (f.__name__, g.__name__)
-    return op
-
-    
-def quotient(f, g):
-    op = lambda p, f=f, g=g: f(p) / g(p)
-    op.__name__ = '(%s / %s)' % (f.__name__, g.__name__)
-    return op
-
-    
-def compose(f, g):
-    op = lambda p, f=f, g=g: f(g(p))
-    op.__name__ = '(%s o %s)' % (f.__name__, g.__name__)
-    return op
-
-    
-def pow(f, index):
-    op = lambda p, f=f, index=index: f(p)**index
-    op.__name__ = '(%s)**%d' % (f.__name__, index)
-    return op
-
-
-def identity():
-    op = lambda p: 1
-    op.__name__ = '1'
-    return op
-
-
-def polynomial(vars, multi_index):
-    assert len(vars) == len(multi_index)
-    assert all(v >= 0 for v in vars)
-
-    if sum(multi_index) == 0: return identity
-
-    p = identity()
-    for var, exponent in zip(vars, multi_index):
-        if exponent == 0:
-            continue
-        elif exponent == 1:
-            p = prod(p, var)
-        else:
-            p = prod(p, pow(var, exponent))
-    return p
-
-
-def poly_indices(d, n):
-    '''Polynomials up to degree d in n variables'''
-    assert 0 < n
-    assert 0 < d
-
-    if d == 1:
-        return [(i, ) for i in range(n)]
-    else:
-        return [(i, ) + j for i in range(n) for j in poly_indices(d-1, n-i)]
-
-
-def coordinate(grid, i):
-    '''Grid function for p[i]'''
-    assert 0 <= i < len(grid)
-    # I would like to avoid having to create data so we fake it
-    class FakeData(object):
-        def __init__(self, grid, i):
-            self.shape = tuple(map(len, grid))
-            self.grid = grid[i]
-            self.i = i
-        def __getitem__(self, p):
-            return self.grid[p[self.i]]
-        
-    return GridFunction(grid, FakeData(grid, i), name='x%d' % i)
-
-# TODO: docs, split grid_function.py algebra?
-# Temporal derivatives
-# Spatial derivatives
-# Polynomials
-# Systematic way of having combinations to build the system
-# Several components for systems -? return arrays?
-
-# Build the system
-
-# --------------------------------------------------------------------
-
-if __name__ == '__main__':
-
-    t = np.linspace(0, 1, 10)
-    x = np.linspace(2, 4, 40)
-
-    grid = [t, x]
-
-    foo_t = diff(coordinate(grid, 0), (0, 1))
-    foo_x = coordinate(grid, 1)
-    point = (3, 2)
-    print (foo_t(point), foo_x(point)), t[point[0]], x[point[1]]
-
-
-    exit()
-    import matplotlib.pyplot as plt
-    from math import sin
-
-    x = np.linspace(-1, 1, 100)
-    f_values = np.sin(5*np.pi*x)
-    
-    x_index = np.arange(len(x))
-    f = GridFunction([x], f_values, 'f')
-    g = GridFunction([x], f_values, 'g')
-
-    print polynomial([f, g], (1, 1)).__name__
-
-    plt.figure()
-    # Derivative
-    plt.plot(x, 5*np.pi*np.cos(5*np.pi*x))
-
-    dgrid_f = compose(sin, diff(f, (1, ), width=11))
-
-    print dgrid_f.__name__
-    # Only eval away from the boundary
-    x_interior_index = x_index[6:-6]
-    plt.plot(x[x_interior_index], map(lambda i: dgrid_f([i]), x_interior_index))
-
-    plt.show()
