@@ -61,6 +61,7 @@ def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
         # Compute the n-derivative in i-th direction using degree
         # FIXME: approach that reuse interpolant = derivs up to ?
         def foo(p):
+            assert isinstance(p, tuple)
             # Eval foo at the line where all by i-th coords are fixed
             # (at their p valeu) and i goes over the stencil
             y = np.array([func(point) for point in points(p, i)])
@@ -160,7 +161,21 @@ def poly_indices(d, n):
         return [(i, ) for i in range(n)]
     else:
         return [(i, ) + j for i in range(n) for j in poly_indices(d-1, n-i)]
+
+
+def coordinate(grid, i):
+    '''Grid function for p[i]'''
+    assert 0 <= i < len(grid)
+    # I would like to avoid having to create data so we fake it
+    class FakeData(object):
+        def __init__(self, grid, i):
+            self.shape = tuple(map(len, grid))
+            self.grid = grid[i]
+            self.i = i
+        def __getitem__(self, p):
+            return self.grid[p[self.i]]
         
+    return GridFunction(grid, FakeData(grid, i), name='x%d' % i)
 
 # TODO: docs, split grid_function.py algebra?
 # Temporal derivatives
@@ -174,6 +189,19 @@ def poly_indices(d, n):
 # --------------------------------------------------------------------
 
 if __name__ == '__main__':
+
+    t = np.linspace(0, 1, 10)
+    x = np.linspace(2, 4, 40)
+
+    grid = [t, x]
+
+    foo_t = diff(coordinate(grid, 0), (0, 1))
+    foo_x = coordinate(grid, 1)
+    point = (3, 2)
+    print (foo_t(point), foo_x(point)), t[point[0]], x[point[1]]
+
+
+    exit()
     import matplotlib.pyplot as plt
     from math import sin
 
