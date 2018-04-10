@@ -29,7 +29,7 @@ class GridFunction(object):
         '''The value at a space-time point reffered to by its indices'''
         # NOTE: if meshgrid is used i,j indexing is needed
         assert isinstance(point, tuple)
-        return self.data[point]
+        return np.array([d[point] for d in self.data])
 
     
 def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
@@ -72,7 +72,7 @@ def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
             assert isinstance(p, tuple)
             # Eval foo at the line where all by i-th coords are fixed
             # (at their p valeu) and i goes over the stencil
-            y = np.array([func(point) for point in points(p, i)])
+            y = np.array([func(point) for point in points(p, i)]).T
             # Get grid physical point in i direction for interpolation
             Xi = X[i]   
             index_i = p[i]
@@ -80,7 +80,8 @@ def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
 
             # Now we can compute the interpolant of degree and take its
             # derivative at 'p' - it's only the Xi that matters
-            return interpolant.fit(x, y, d).deriv(n)(Xi[index_i])
+            p = Xi[index_i]
+            return np.array([interpolant.fit(x, yi, d).deriv(n)(p) for yi in y])
         # Still a grid function like
         foo.dim = func.dim
         foo.grid = X
@@ -88,10 +89,6 @@ def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
 
     # I want the highest derivative to be computed from the data
     diffs = sorted(diffs, key=lambda p: p[1], reverse=True)
-
-    # Annotate
-    name = ''.join(['x_{%d}^{%d}' % d for d in diffs])
-    name = r'(d %s / d %s)' % (f.__name__, name)
     
     func = f
     while diffs:
@@ -99,6 +96,4 @@ def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
         # At first we diff the function which use the grid data
         # For other directions we use the derivatives
         func = diff_func(func=func, i=index, n=power)
-    
-    func.__name__ = name
     return func
