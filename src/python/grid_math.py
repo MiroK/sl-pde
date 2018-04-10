@@ -1,27 +1,19 @@
 # Here we define operations over grid functions, well any functions of
 # one argument, which let us build expressions
 from grid_function import diff as diff_grid
+from grid_function import GridFunction
+import itertools, operator
 import sympy as sp
 
 
-def coordinate(grid, i):
+class Coordinate(GridFunction):
     '''Grid function for the i-th coordinate of p[i]'''
-    assert 0 <= i < len(grid)
-    # I would like to avoid having to create data so we fake it
-    class FakeData(object):
-        def __init__(self, grid, i):
-            self.shape = tuple(map(len, grid))
-            self.grid = grid[i]
-            self.i = i
-        def __getitem__(self, p):
-            return self.grid[p[self.i]]
-        
-    return GridFunction(grid, FakeData(grid, i))
+    def __init__(self, grid, i):
+        assert 0 <= i < len(grid)
+        self.grid = grid[i]
+        self.i = i
 
-
-def coordinates(grid):
-    '''Functions for the coordinates'''
-    return [coordinate(grid, i) for i in range(len(grid))]
+    def __call__(self, p): return np.array([self.grid[p[self.i]]])
 
 
 # Now I would like to use sympy an create expressions from the grid functions

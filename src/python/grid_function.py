@@ -14,8 +14,12 @@ class GridFunction(object):
     '''
     def __init__(self, grid, data):
         '''Grid is a tensor product of intervals'''
-        assert len(grid) == len(data.shape), (len(grid), len(data.shape))
-        assert map(len, grid) == list(data.shape), (map(len, grid), list(data.shape)) 
+        if isinstance(data, np.ndarray): data = [data]
+        
+        # Shape consistency of all the components
+        for d in data:
+            assert len(grid) == len(d.shape), (len(grid), len(d.shape))
+            assert map(len, grid) == list(d.shape), (map(len, grid), list(d.shape)) 
 
         self.grid = grid
         self.dim = len(grid)  # The space time dimension
