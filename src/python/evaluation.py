@@ -9,8 +9,8 @@ class GridFunction(object):
     '''
     def __init__(self, grid, data, name='u'):
         '''Grid is a tensor product of intervals'''
-        assert len(grid) == len(data.shape)
-        assert map(len, grid) == list(data.shape)
+        assert len(grid) == len(data.shape), (len(grid), len(data.shape))
+        assert map(len, grid) == list(data.shape), (map(len, grid), list(data.shape)) 
 
         self.grid = grid
         self.dim = len(grid)  # The space time dimension
@@ -20,6 +20,7 @@ class GridFunction(object):
     def __call__(self, point):
         '''The value at a space-time point reffered to by its indices'''
         # NOTE: if meshgrid is used i,j indexing is needed
+        assert isinstance(point, tuple)
         return self.data[point]
 
     
