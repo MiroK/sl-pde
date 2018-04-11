@@ -1,4 +1,4 @@
-from evaluation import GridFunction, diff
+from grid_function import GridFunction, diff
 from collections import defaultdict
 from itertools import izip
 import numpy as np
@@ -26,6 +26,8 @@ def test_1d_poly(n):
     # We look at up to 3 derivatives
     derivs = [(0, ), (1, ), (2, ), (3, )]
     status = True
+
+    numeric = np.zeros(len(pts))
     for foo in functions:
         print foo
         foo_values = np.array(map(sp.lambdify(t, foo), t_domain))
@@ -42,7 +44,53 @@ def test_1d_poly(n):
             exact = df(pts)
 
             dgrid_foo = diff(grid_foo, d)
-            numeric = np.array([dgrid_foo((i, )) for i in pts_index]).flatten()
+            [dgrid_foo((pi, ), numeric[i:i+1]) for i, pi in enumerate(pts_index)]
+
+            error = exact - numeric
+            e = np.linalg.norm(error)
+            print 'OK' if e < TOL else (exact, numeric)
+
+            status = status and e < TOL
+    return status
+
+
+def test_1d_poly_vec(n):
+    '''Error for some approx at [-1, 4]'''
+    t = sp.Symbol('t')
+    t_domain = np.linspace(-1, 4, n)  # Physical
+    t_domain_index = range(len(t_domain))
+
+    # I will look at 3 points aroung the center
+    pts_index = [t_domain_index[len(t_domain)/2-1],
+                 t_domain_index[len(t_domain)/2],
+                 t_domain_index[len(t_domain)/2+1]]
+    pts = t_domain[pts_index]
+
+    symbols = (t, )
+    functions = [2*t, 3*(t**2-2*t+1), (t**4 - 2*t**2 + t - 1)]
+    # We look at up to 3 derivatives
+    derivs = [(0, ), (1, ), (2, ), (3, )]
+    status = True
+
+    numeric = np.zeros((len(pts), 2))
+    for foo in functions:
+        print foo
+        foo_values = np.array(map(sp.lambdify(t, foo), t_domain))
+        grid_foo = GridFunction([t_domain], [foo_values, 2*foo_values])
+        for d in derivs:
+            if d != (0, ):
+                dfoo = foo
+                for var, deg in zip(symbols, d): dfoo = dfoo.diff(var, deg)
+            else:
+                dfoo = foo
+            print '\t', d, dfoo,
+            # True
+            df = sp.lambdify(t, dfoo)
+            exact = df(pts)
+            exact = np.c_[exact, 2*exact]
+
+            dgrid_foo = diff(grid_foo, d)
+            [dgrid_foo((pi, ), numeric[i:i+1]) for i, pi in enumerate(pts_index)]
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -72,6 +120,7 @@ def test_2d_poly(n):
     # Some deriveatives
     derivs = [(0, 0), (1, 0), (0, 1), (1, 1), (2, 1), (3, 1), (1, 3), (2, 2)]
 
+    numeric = np.zeros(len(pts))    
     status = True
     for foo in functions:
         print foo
@@ -90,7 +139,7 @@ def test_2d_poly(n):
             exact = np.array([df(*pt) for pt in pts])
 
             dgrid_foo = diff(grid_foo, d)
-            numeric = np.array([dgrid_foo(i) for i in pts_indices])
+            [dgrid_foo(pi, numeric[i:i+1]) for i, pi in enumerate(pts_indices)]
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -122,6 +171,7 @@ def test_3d_poly(n):
               (1, 3, 1)]
 
     status = True
+    numeric = np.zeros(len(pts))
     for foo in functions:
         print foo
         foo_values = sp.lambdify((t, x, y), foo, 'numpy')(T, X, Y)
@@ -139,7 +189,7 @@ def test_3d_poly(n):
             exact = np.array([df(*pt) for pt in pts])
 
             dgrid_foo = diff(grid_foo, d)
-            numeric = np.array([dgrid_foo(i) for i in pts_indices])
+            [dgrid_foo(pi, numeric[i:i+1]) for i, pi in enumerate(pts_indices)]
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -169,6 +219,7 @@ def test_4d_poly(n):
     # Some deriveatives
     derivs = [(0, 0, 3, 0), (1, 0, 1, 1), (0, 1, 0, 2), (2, 1, 0, 3), (1, 1, 2, 1)]
 
+    numeric = np.zeros(len(pts))
     status = True
     for foo in functions:
         print foo
@@ -187,7 +238,7 @@ def test_4d_poly(n):
             exact = np.array([df(*pt) for pt in pts])
 
             dgrid_foo = diff(grid_foo, d)
-            numeric = np.array([dgrid_foo(i) for i in pts_indices])
+            [dgrid_foo(pi, numeric[i:i+1]) for i, pi in enumerate(pts_indices)]
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -214,7 +265,8 @@ def test_1d_approx(n, width=7):
     functions = [2*sp.sin(sp.pi*t), sp.cos(2*sp.pi*t**2)]
     # We look at up to 3 derivatives
     derivs = [(1, ), (2, ), (3, ), (4, )]
-    
+
+    numeric = np.zeros(len(pts))
     status = {f: list() for f in functions}
     for foo in functions:
         foo_values = np.array(map(sp.lambdify(t, foo), t_domain))
@@ -230,7 +282,7 @@ def test_1d_approx(n, width=7):
             exact = np.array(map(df, pts))
 
             dgrid_foo = diff(grid_foo, d, width=width)
-            numeric = np.array([dgrid_foo((i, )) for i in pts_index]).flatten()
+            [dgrid_foo((pi, ), numeric[i:i+1]) for i, pi in enumerate(pts_index)]
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -260,6 +312,7 @@ def test_2d_approx(n):
     # Some deriveatives
     derivs = [(1, 0), (0, 1), (1, 1), (2, 1), (3, 1), (1, 3), (2, 2)]
     errors = {foo: list() for foo in functions}
+    numeric = np.zeros(len(pts))
     for foo in functions:
 
         foo_values = sp.lambdify((t, x), foo, 'numpy')(T, X)
@@ -277,7 +330,7 @@ def test_2d_approx(n):
             exact = np.array([df(*pt) for pt in pts])
 
             dgrid_foo = diff(grid_foo, d)
-            numeric = np.array([dgrid_foo(i) for i in pts_indices])
+            [dgrid_foo(pi, numeric[i:i+1]) for i, pi in enumerate(pts_indices)]
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -306,6 +359,7 @@ def test_3d_approx(n):
     derivs = [(1, 0, 1), (2, 1, 1), (3, 1, 2), (1, 3, 1)]
 
     errors = defaultdict(list)
+    numeric = np.zeros(len(pts))
     for foo in functions:
         foo_values = sp.lambdify((t, x, y), foo, 'numpy')(T, X, Y)
         grid_foo = GridFunction([t_domain, x_domain, y_domain], foo_values)
@@ -322,7 +376,7 @@ def test_3d_approx(n):
             exact = np.array([df(*pt) for pt in pts])
 
             dgrid_foo = diff(grid_foo, d)
-            numeric = np.array([dgrid_foo(i) for i in pts_indices])
+            [dgrid_foo(pi, numeric[i:i+1]) for i, pi in enumerate(pts_indices)]
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -352,7 +406,7 @@ def test_4d_approx(n):
                 
     # Some deriveatives
     derivs = [(0, 0, 3, 0), (1, 0, 1, 1), (0, 1, 0, 2), (2, 1, 0, 3), (1, 1, 2, 1)]
-
+    numeric = np.zeros(len(pts))
     errors = defaultdict(list)
     for foo in functions:
         foo_values = sp.lambdify((t, x, y, z), foo, 'numpy')(T, X, Y, Z)
@@ -370,7 +424,7 @@ def test_4d_approx(n):
             exact = np.array([df(*pt) for pt in pts])
 
             dgrid_foo = diff(grid_foo, d)
-            numeric = np.array([dgrid_foo(i) for i in pts_indices])
+            [dgrid_foo(pi, numeric[i:i+1]) for i, pi in enumerate(pts_indices)]
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -419,6 +473,8 @@ if __name__ == '__main__':
     if checks[0]:
         # Polynomial must be exact
         assert test_1d_poly(10)
+        # Also for tensor valued
+        assert test_1d_poly_vec(10)
 
         # With other functions there should be some convergence
         n_values = (32, 64, 128, 256)
@@ -431,6 +487,8 @@ if __name__ == '__main__':
         # With other functions there should be some convergence
         n_values = (32, 64, 128)
         assert check_approx(test_2d_approx, n_values)
+        
+    # FIXME: update below
     # t x y
     if checks[2]:
         # Polynomial must be exact

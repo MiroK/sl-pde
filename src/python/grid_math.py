@@ -9,11 +9,6 @@ import sympy as sp
 class Coordinate(GridFunction):
     '''Grid function for the i-th coordinate of p[i]'''
     def __init__(self, grid, i):
-        assert 0 <= i < len(grid)
-        self.grid = grid[i]
-        self.i = i
-
-    def __call__(self, p): return np.array([self.grid[p[self.i]]])
 
 
 # Now I would like to use sympy an create expressions from the grid functions
