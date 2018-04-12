@@ -16,7 +16,7 @@ class GenericGridFunction(object):
     i) f(p) maps a ntuple of indices to number(s)
     ii) has a grid
     '''
-    def __init__(self, grid, f, value_shape):
+    def __init__(self, grid, f, value_shape=(1, )):
         '''f : index(grid) -> R^value_shape'''
         self.grid = grid
         self.dim = len(grid)  # Dimension of space-time cylinder
@@ -114,7 +114,7 @@ def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
     the same shape. Derivative uses polynomial approximation with width 
     points using and a polynomial of give degree.
     '''
-    assert isinstance(f, GenericGridFunction)
+    assert isinstance(f, (GenericGridFunction, int, float))
     
     # Assert odd because then we get the stencil of widht centered around
     # the point
