@@ -16,26 +16,30 @@ class GenericGridFunction(object):
     i) f(p) maps a ntuple of indices to number(s)
     ii) has a grid
     '''
-    def __init__(self, grid, f, value_shape=(1, )):
+    def __init__(self, grid, f, value_shape=()):
         '''f : index(grid) -> R^value_shape'''
         self.grid = grid
         self.dim = len(grid)  # Dimension of space-time cylinder
         self.value_shape = value_shape
         self.f = f
 
-    def __call__(self, point, y):
+    def __call__(self, point):
         '''The value at a space-time point reffered to by its indices'''
         # NOTE: if meshgrid is used i,j indexing is needed
         assert isinstance(point, tuple)
-        y.ravel()[:] = self.f(point)   # Value from f
+        return self.f(point)   # Value from f
 
 
 class GridFunction(GenericGridFunction):
     '''Grid function constructed from data over grid'''
     def __init__(self, grid, data):
-        # A single npdarry is a scalar. For other shapes we pass a list
-        # of list of ... ndarray
-        if isinstance(data, np.ndarray): data = [data]
+        # A single npdarry is a scalar.
+        if isinstance(data, np.ndarray):
+            GenericGridFunction.__init__(self, grid, f=lambda p: data[p], value_shape=())
+            return None
+        
+        assert len(data) > 1  # Don't want len 1 vectors, or row vectors?
+        # Everything else not is a tenseor valued
 
         # Now all the components mush mathch the grid shape
         def is_consistent(d, grid=grid):
@@ -45,7 +49,6 @@ class GridFunction(GenericGridFunction):
 
             return all(is_consistent(di, grid=grid) for di in d)
         assert is_consistent(data)
-        # NOTE: maybe it would be easier to make data = np.array(data)
         
         # With okay shaped components we see if the data defines in a
         # sensible way a vector tensor ...
@@ -68,8 +71,7 @@ class GridFunction(GenericGridFunction):
         y = np.zeros(fshape)
         def f(p, data=data, y=y):
             # Fill by look up
-            for i, d in enumerate(data):
-                y[i] = d[p]
+            y.ravel()[:] = [d[p] for d in data]
             return y
 
         GenericGridFunction.__init__(self, grid, f, value_shape)
@@ -78,21 +80,33 @@ class GridFunction(GenericGridFunction):
 def Coordinate(grid, i):
     '''Grid function for i'th coordinate'''
     assert 0 <= i < len(grid)
-    shape = (1, )  # A scalar
+    shape = ()  # A scalar
     f = lambda p, grid=grid[i], i=i: grid[p[i]]
     return GenericGridFunction(grid, f, shape)
 
 
 def SpaceTimeCoordinate(grid):
     '''Vector in space time index -> physical'''
-    shape = (len(grid), )
+    if len(grid) == 1:
+        shape = ()
+    else:
+        shape = (len(grid), )
     f = lambda p, grid=grid: grid[p]
     return GenericGridFunction(grid, f, shape)
 
 
+def TemporalCoordinate(grid):
+    '''Time axis'''
+    return Coordinate(grid, 0)
+
+
 def SpatialCoordinate(grid):
     '''Spatial axes'''
-    shape = (len(grid)-1, )
+    assert len(grid) > 1
+
+    if len(grid) == 2:
+        return Coordinate(grid, 1)
+    shapee = (len(grid), )
     # Let's try to be more efficient
     y = np.zeros(shape)
     def f(p, grids=grid[1:], y=y):
@@ -101,11 +115,6 @@ def SpatialCoordinate(grid):
         return y
     
     return GenericGridFunction(grid, f, shape)
-
-
-def TemporalCoordinate(grid):
-    '''Time axis'''
-    return Coordinate(grid, 0)
 
 
 def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
@@ -144,30 +153,53 @@ def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
     # Now the functions we have are evaluated at index points and we
     # pretty much proceeed by doing things on lines/axis
     def diff_func(func, i, n, X=f.grid, d=degree):
-        # Prealoc output
-        out = np.zeros(np.prod(f.value_shape))
-        y = np.zeros((width, len(out)))
+        # Vectors
+        if func.value_shape:
+            # Prealoc output
+            value_size = np.prod(f.value_shape)
+            y = np.zeros((width, value_size))  # Always flat, work
+            out = np.zeros(value_size)
+            # Compute the n-derivative in i-th direction using degree
+            # FIXME: approach that reuse interpolant = derivs up to ?
+            def foo(p, y=y, indices=range(value_size), out=out):
+                assert isinstance(p, tuple)
+                # Eval foo at the line where all by i-th coords are fixed
+                # (at their p valeu) and i goes over the stencil
+                for y_row, x in zip(y, points(p, i)): np.put(y_row, indices, func(x))
+                    
+                # Get grid physical point in i direction for interpolation
+                Xi = X[i]   
+                index_i = p[i]
+                x = Xi[stencil(index_i)]  
 
-        # Compute the n-derivative in i-th direction using degree
-        # FIXME: approach that reuse interpolant = derivs up to ?
-        def foo(p, out=out, y=y):
-            assert isinstance(p, tuple)
-            # Eval foo at the line where all by i-th coords are fixed
-            # (at their p valeu) and i goes over the stencil            
-            for x, y_row in zip(points(p, i), y): func(x, y_row)
+                # Now we can compute the interpolant of degree and take its
+                # derivative at 'p' - it's only the Xi that matters
+                p = Xi[index_i]
+                out[:] = [interpolant.fit(x, y[:, col], d).deriv(n)(p)
+                          for col in range(y.shape[1])]
+                # NOTE: we reuse the same pointer for return value.
+                # so [foo(p) for in (x, y, z)] will at the end hold
+                # 3 values determined by f(z)
+                return out
+        # Scalar
+        else:
+            y = np.zeros(width)  # Work array for interpolation
 
-            # Get grid physical point in i direction for interpolation
-            Xi = X[i]   
-            index_i = p[i]
-            x = Xi[stencil(index_i)]  
+            def foo(p, y=y):
+                assert isinstance(p, tuple)
+                # Eval foo at the line where all by i-th coords are fixed
+                # (at their p valeu) and i goes over the stencil            
+                y.ravel()[:] = [func(x) for x in points(p, i)]
 
-            # Now we can compute the interpolant of degree and take its
-            # derivative at 'p' - it's only the Xi that matters
-            p = Xi[index_i]
-            out.ravel()[:] = [interpolant.fit(x, y[:, col], d).deriv(n)(p)
-                              for col in range(y.shape[1])]
-            
-            return out
+                # Get grid physical point in i direction for interpolation
+                Xi = X[i]   
+                index_i = p[i]
+                x = Xi[stencil(index_i)]  
+
+                # Now we can compute the interpolant of degree and take its
+                # derivative at 'p' - it's only the Xi that matters
+                p = Xi[index_i]
+                return interpolant.fit(x, y, d).deriv(n)(p)
         # Still a grid function like
         return GenericGridFunction(func.grid, foo, func.value_shape)
 

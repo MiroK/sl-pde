@@ -44,7 +44,7 @@ def test_1d_poly(n):
             exact = df(pts)
 
             dgrid_foo = diff(grid_foo, d)
-            [dgrid_foo((pi, ), numeric[i:i+1]) for i, pi in enumerate(pts_index)]
+            numeric[:] = [dgrid_foo((pi, )) for pi in pts_index]
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -90,7 +90,9 @@ def test_1d_poly_vec(n):
             exact = np.c_[exact, 2*exact]
 
             dgrid_foo = diff(grid_foo, d)
-            [dgrid_foo((pi, ), numeric[i:i+1]) for i, pi in enumerate(pts_index)]
+
+            for row, pi in zip(numeric, pts_index):
+                np.put(row, range(2), dgrid_foo((pi, )))
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -282,7 +284,7 @@ def test_1d_approx(n, width=7):
             exact = np.array(map(df, pts))
 
             dgrid_foo = diff(grid_foo, d, width=width)
-            [dgrid_foo((pi, ), numeric[i:i+1]) for i, pi in enumerate(pts_index)]
+            numeric.ravel()[:] = [dgrid_foo((pi, )) for pi in pts_index]
 
             error = exact - numeric
             e = np.linalg.norm(error)
@@ -467,7 +469,7 @@ def check_approx(gen, n_values):
 
 if __name__ == '__main__':
     # Checks for dimensions
-    checks = [True, True, True, True]
+    checks = [True, 0, 0, 0]#True, True, True]
     
     # t
     if checks[0]:

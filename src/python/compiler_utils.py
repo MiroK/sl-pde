@@ -35,9 +35,9 @@ def extract_shape(op, *grid_fs):
     assert grid_fs
     head, tail = grid_fs[0], grid_fs[1:]
             
-    if not tail: return (1, ) if is_number(head) else head.value_shape
+    if not tail: return () if is_number(head) else head.value_shape
 
-    first = (1, ) if is_number(head) else head.value_shape
+    first = () if is_number(head) else head.value_shape
     # FIXME: don't allow rank-3 and higher. Their existnce in general.
     # This is simplification until I figure out the operations like *
     assert 0 < len(first) < 3
@@ -80,10 +80,10 @@ def check_sympy_subs(subs):
     for sym, grid in subs.iteritems():
         # Scalar
         if isinstance(sym, sp.Symbol):
-            assert sum(grid.value_shape) == 1
+            assert value_shape == ()
         else:
             assert isinstance(sym, sp.MatrixSymbol)
-            assert sum(grid.value_shape) > 1
+            assert len(grid.value_shape) > 0
             # Check for possible vectors as COLUMN vectors
             if len(grid.value_shape) == 1:
                 nrows, ncols = sym.shape
@@ -104,14 +104,9 @@ def consume(iterator):
     collections.deque(iterator, maxlen=0)
 
 
-def is_derivative_node(f):
-    '''Derivative node in the sympy expression'''
-    return isinstance(f, sp.Derivative)
-
-
-def has_derivative_node(expr):
+def is_derivative_free(expr):
     '''Does expression contain derivative'''
-    return is_derivative_node(expr) or any(is_derivative_node(arg) for arg in expr.args)
+    return not isinstance(expr, sp.Derivative) and all(itertools.imap(is_derivative_free, expr.args))
 
 
 # Translating nodes in the sympy compiler
@@ -144,7 +139,7 @@ def apply_mul(*fs):
     if not grid_fs: return reduce(operator.mul, numbers)
 
     assert grid is not None
-    nums_prod = reduce(operator.mul, numbers)
+    nums_prod = reduce(operator.mul, numbers) if numbers else 1
 
     op = lambda p, fs=grid_fs, A=nums_prod: A*reduce(lambda x, y: x*y, (f(p) for f in fs))
     return GenericGridFunction(grid, op, shape)
@@ -174,8 +169,7 @@ if __name__ == '__main__':
     grid_f = GridFunction(grid, [[data, 2*data], [3*data, 4*data]])
 
     #y = np.zeros(grid_f.value_shape)
-    grid_f((8, 7, 6, 7), y)
-    print y
+    print grid_f((8, 7, 6, 7))
     #grid_g = GridFunction(grid, [data, -2*data])
 
     #print expr_value_shape(f * g, {f: grid_f, g: grid_g})

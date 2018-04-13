@@ -37,12 +37,11 @@ def compile_from_expr(expr, subs, grid=None, tx_coords=sp.symbols('t x y z')):
         return subs[expr]
 
     # Nodes
-    Derivative = type(sp.Derivative(tx_coords[0], tx_coords[1]))
-    if isinstance(expr, Derivative):
+    if isinstance(expr, sp.Derivative):
         # Split into d diffable / d exponents
         # Compule the symbolic body
         diffable = compile_from_expr(expr.args[0], subs=subs, grid=grid)
-        
+        print 'diffable', expr
         exponent = expr.args[1:]
         # We have to be honest and diff only w.r.t to space-time
         assert set(exponent) <= set(tx_coords)
@@ -55,8 +54,9 @@ def compile_from_expr(expr, subs, grid=None, tx_coords=sp.symbols('t x y z')):
 
     # FIXME: New we have a sympy expression which may or may not be free
     # of the derivatives. For the former we rely on sympy; otherwise there
-    # is work to be done                                    
-    if not has_derivative_node(expr):
+    # is work to be done
+    print expr, is_derivative_free(expr)
+    if is_derivative_free(expr):
         print 'Applies', expr
         # Now we rely on sympys lambdify hoping that if does some optimizations
         vars = tuple(expr.free_symbols)
@@ -70,9 +70,9 @@ def compile_from_expr(expr, subs, grid=None, tx_coords=sp.symbols('t x y z')):
         body = sp.lambdify(vars, expr, 'math')  # Or numpy? 
 
         work = np.zeros(len(vars_f))
-        def compiled(p, f=body, atoms=vars_f, work=work):
+        def compiled(p, f=body, atoms=vars_f, work=work, indices=range(len(work))):
             # Evaluate atoms once
-            consume(atom(p, work[i:i+1]) for i, atom in enumerate(atoms))
+            np.put(work, indices, [atom(p) for atom in atoms])
             # Use in body
             return f(*work)
 
@@ -80,14 +80,14 @@ def compile_from_expr(expr, subs, grid=None, tx_coords=sp.symbols('t x y z')):
 
     # For a plus node we try to isolate what sympy could lamdify
     if isinstance(expr, sp.Add):
-        terms, lambdify_pieces = split(has_derivative_node, expr.args)
+        terms, lambdify_pieces = split(is_derivative_free, expr.args)
         # New sum expression for sympy joins the pile for compilation
         terms.append(reduce(operator.add, lambdify_pieces))
         # Into grid functions
         return apply_add(*[compile_from_expr(t, subs=subs, grid=grid) for t in terms])
 
     if isinstance(expr, sp.Mul):
-        terms, lambdify_pieces = split(has_derivative_node, expr.args)
+        terms, lambdify_pieces = split(is_derivative_free, expr.args)
         # New sum expression for sympy joins the pile for compilation
         terms.append(reduce(operator.mul, lambdify_pieces))
         # Into grid functions
@@ -115,25 +115,18 @@ if __name__ == '__main__':
     expr_numpy = sp.lambdify((t, x, y, z), expr, 'numpy')
     data = expr_numpy(T, X, Y, Z)
 
-    grid_expr = GridFunction(grid, [data])
+    grid_expr = GridFunction(grid, data)
     
     # Check the values at
     i_point = (8, 7, 6, 7)
     point = [grid[i][p] for i, p in enumerate(i_point)]
     
-    compiled_expr = compile_from_expr(f**2 + sp.Derivative(f, x), {f: grid_expr}, grid=grid)
-    compiled_expr(i_point, values)
-    values *= 0
-    compiled_expr(i_point, values)
-    values *= 0
-    compiled_expr(i_point, values)
+    compiled_expr = compile_from_expr(f**3 + f*sp.Derivative(f, x, y)**2, {f: grid_expr}, grid=grid)
+    values[:] = compiled_expr(i_point)
 
-    print values, (lambda v: v**2 + v)(expr_numpy(*point))
+    print values, 
 
     # # Now take some derivative
-    #compiled_derivative = compile_from_expr(sp.Derivative(f, x, y)+f, {f: grid_expr}, grid=grid)
-    #df_expr = expr*sp.Derivative(expr, x, y)
-    # print type(df_expr)
-    #compiled_derivative(i_point, values),
+    df_expr = expr**2 + expr*sp.Derivative(expr, x, y)
 
-    #print values, sp.lambdify((t, x, y, z), df_expr.doit())(*point)
+    print sp.lambdify((t, x, y, z), df_expr.doit())(*point)
