@@ -203,10 +203,10 @@ def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
         # Still a grid function like
         return GenericGridFunction(func.grid, foo, func.value_shape)
 
-    # I want the highest derivative to be computed from the data
-    # NOTE this assumes that the underlying function is smooth enough to
-    # allow for derivative order to be changed
-    diffs = sorted(diffs, key=lambda p: p[1], reverse=True)
+    # NOTE: sorting would allow to use the highest derivative to be
+    # computed from the data but it also strongly enforces that the
+    # derivatives can be shuffled around.
+    # diffs = sorted(diffs, key=lambda p: p[1], reverse=True)
     
     func = f
     while diffs:

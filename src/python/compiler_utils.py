@@ -1,8 +1,7 @@
+import collections, itertools, operator, math
 from grid_function import GenericGridFunction
 import sympy as sp
-import collections
-import itertools
-import operator
+
 
 # We view numbers as special grid functions (free of grid), and obviously
 # scalars
@@ -93,6 +92,38 @@ def check_sympy_subs(subs):
     return subs
 
 
+def gather_exponent(exponent, axis):
+    '''Sympy Derivative(f, x, 2, y, 2) to a corresponding tuples'''
+    # Get rid of numbers
+    def expand(exponent):
+        if not exponent: return ()
+        if len(exponent) == 1: return exponent
+
+        e0, e1 = exponent[:2]
+        
+        assert isinstance(e0, sp.Symbol)
+        
+        if isinstance(e1, int):
+            return (e0, )*e1 + expand(exponent[2:])
+        else:
+            return (e0, ) + expand(exponent[1:])
+    exponent = expand(exponent)
+
+    # Now we want to make sure that :
+    # 1) we are only using the derivatives in the axis
+    assert set(exponent) <= set(axis)
+
+    # And encode the derivative for diffing. Again the orther
+    encode = [0]*len(axis)
+    for i, a in enumerate(axis):
+        if a in exponent:
+            degree = exponent.count(a)
+            # Must be continuous
+            assert exponent[exponent.index(a):exponent.index(a)+degree].count(a) == degree
+            encode[i] = degree
+    return encode
+    
+
 def split(pred, iterable):
     '''Partition iterable into true, false by predicate'''
     t0, t1 = itertools.tee(iterable)
@@ -143,6 +174,36 @@ def apply_mul(*fs):
 
     op = lambda p, fs=grid_fs, A=nums_prod: A*reduce(lambda x, y: x*y, (f(p) for f in fs))
     return GenericGridFunction(grid, op, shape)
+
+
+def apply_pow(foo, power):
+    '''Product of grid functions'''
+    # Consistency check
+    assert is_number(foo) or foo.value_shape == ()  # Scalar only (for now)
+    assert is_number(power)
+
+    if is_number(foo): return foo**power
+
+    grid = foo.grid
+    value_shape = foo.value_shape
+
+    op = lambda p, f=foo, power=power: (f(p))**power
+    return GenericGridFunction(grid, op, value_shape)
+
+
+def apply_compose(f, g):
+    '''Composition f o g'''
+    assert is_number(g) or g.value_shape == ()
+
+    # Grab the representation from math (we have scalars)
+    f = getattr(math, f)
+    if is_number(g): return f(g)
+
+    grid = g.grid
+    value_shape = g.value_shape
+    op = lambda p, f=f, g=g: f(g(p))
+    
+    return GenericGridFunction(grid, op, value_shape)
 
 # --------------------------------------------------------------------
 
