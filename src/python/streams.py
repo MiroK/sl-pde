@@ -30,19 +30,51 @@ def extract_primitives(expr):
 
 
 def expand_derivative(expr):
-    '''Expand D(f**2, x) into 2*f*D(f, x)'''
-    if isinstance(expr, sp.Derivative):
-        f, by = expr.args[0], expr.args[1:]
-        if f.is_Symbol:
-            return expr
-        assert is_derivative_free(f), f
-        # A chaing rule (D f**2 / D f)(Df / Dx)
-        return sum(f.diff(s)*sp.Derivative(s, *by) for s in f.free_symbols)
+    '''
+    Transform expr such that it only contains derivatives of symbols 
+    w.r.t. t, x, y, z. For example: D(f**2, x) --> 2*f*D(f, x)
+    '''
     # Don't expand where there are no derivatives
     if is_number(expr) or is_derivative_free(expr): return expr
+
+    # Expand derivavtive
+    if isinstance(expr, sp.Derivative):
+        f, dxs = expr.args[0], expr.args[1:]
+        # For symbo body we're done (this can compile)
+        if f.is_Symbol: return expr
+
+        # Otherwise we apply rule (D f**2 / D f)(Df / Dx) where x is the
+        # first var used for differentiation
+        x = dxs[0]
+        inner = sum(diff(f, s)*sp.Derivative(s, x) for s in extract_primitives(f))
+        # For first order derivatives we're done
+        if not dxs[1:]: return inner
+        # Otherwise we keep expanding
+        return expand_derivative(sp.Derivative(inner, *dxs[1:]))
+        
     # Finally build up from nodes
     return type(expr)(*map(expand_derivative, expr.args))
 
+
+def diff(expr, dexpr):
+    '''Diff expr w.r.t to other expression'''
+    # This is useful in expand_derivative where as a resulf of diff w.r.t
+    # to primitives we might end up doing d _ / d Derivative(). Here normal
+    # sympy will fail
+    if dexpr.is_Symbol:
+        # Diff of Derivative is more Derivative
+        if isinstance(expr, sp.Derivative):
+            body, dxs = expr[0], expr[1:]
+            return sp.Derivative(body, dxs + (dexpr, ))
+        else:
+            return expr.diff(dexpr)
+
+    # Non atomic: i) sub for dexpr a symbol,
+    #             ii) diff substituted expr w.r.t to substitution symbol
+    #             iii) in the result sub the symbol for the orig expr
+    dsub_sym = sp.Symbol('sub_sym')
+    return substitute(diff(substitute(expr, dexpr, dsub_sym), dsub_sym), dsub_sym, dexpr)
+    
 
 def substitute(expr, match, target):
     '''Replace an expression where math is substituted by taget'''
@@ -61,9 +93,10 @@ def compile_stream(expr, subs):
     Given a list of n expression return a function which maps a grid 
     index point to n-tuple where each value corresponds to expression(p)
     '''
-    if len(expr) == 1: return compiler_expr(expr, subs)
+    if len(expr) == 1: return compile_expr(expr[0], subs)
     # Exapand to reuse derivatives
     expr = map(expand_derivative, expr)
+
     # Primities are things that will be compiled to grid foo
     primitives = set(sum(map(extract_primitives, expr), ()))
     # Let the derivs be substituted first
@@ -132,7 +165,7 @@ if __name__ == '__main__':
                   f*sp.Derivative(f, x),
                   f**2 + sp.sqrt(f)*sp.Derivative(f, y),
                   sp.Derivative(f, x, y) + sp.Derivative(g, y, y),
-                  sp.Derivative(f**2, y, x) + sp.Derivative(f, y, y))
+                  sp.Derivative(f**2, y, x) + sp.Derivative(g, y, x))
     subs = {f: grid_expr, g: grid_expr1}
     
     expr_stream = compile_stream(expression, subs)
@@ -146,5 +179,6 @@ if __name__ == '__main__':
 
     # FIXME: single ode - learning       (scikit-learn)
     #        several odes - learning
+    #        TESTS
     #        1d pde (u_xx u_x u)
     #        2d pde same

@@ -91,7 +91,7 @@ def SpaceTimeCoordinate(grid):
         shape = ()
     else:
         shape = (len(grid), )
-    f = lambda p, grid=grid: grid[p]
+    f = lambda p, grid=grid: [grid[i][p[i]] for i in range(len(p))]
     return GenericGridFunction(grid, f, shape)
 
 
