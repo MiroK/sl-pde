@@ -2,11 +2,15 @@
 from grid_function import GridFunction
 from learn_utils import linear_combination, plot_learning_curve
 from streams import compile_stream
+from system_generation import polynomials
 
 from sklearn.linear_model import Lasso
 import matplotlib.pyplot as plt
 import sympy as sp
 import numpy as np
+import itertools
+import operator
+
 
 T_end = 10
 n_samples = 1000
@@ -25,7 +29,11 @@ u_data = u_exact(t_domain)
 u_grid = GridFunction([t_domain], u_data)
 lhs_stream = compile_stream((sp.Derivative(u, t), ), {u: u_grid})
 
-columns = (1, u, u**2, sp.sin(u), sp.cos(u))
+poly = polynomials([u], 4)
+foos = (sp.sin(u), sp.cos(u), sp.exp(-u))
+
+columns = list(poly) + list(foos) + [reduce(operator.mul, cs) for cs in itertools.product(poly, foos)]
+
 rhs_stream = compile_stream(columns, {u:u_grid})
 
 # A subset of this data is now used for training; where we can eval deriv
@@ -45,6 +53,4 @@ plot_learning_curve(lasso_reg, rhs, lhs)
 
 plt.show()
 
-#lasso_reg.fit(rhs, lhs)
-
-#print 'd u / dt =', linear_combination(lasso_reg.coef_, columns)
+print 'd u / dt =', linear_combination(lasso_reg.coef_, columns)

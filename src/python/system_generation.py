@@ -29,12 +29,12 @@ def poly_indices(d, n):
 def polynomial(vars, multi_index):
     '''Symbolic polynomial; Prod x^index(k)_k for every k in index'''
     assert len(vars) == len(multi_index)
-    assert all(v >= 0 for v in vars)
+    assert all(i >= 0 for i in multi_index)
 
-    if sum(multi_index) == 0: return identity
+    if sum(multi_index) == 0: return 1
 
     p = sp.S(1)
-    for var, exponent in zip(vars, multi_index):
+    for var, exponent in zip(reversed(vars), multi_index):
         if exponent == 0:
             continue
         elif exponent == 1:

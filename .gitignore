@@ -8,3 +8,6 @@
 *.vtk
 
 /src/c/_*.c
+
+*.swp
+*.swo
