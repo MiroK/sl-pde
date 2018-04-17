@@ -117,7 +117,7 @@ def SpatialCoordinate(grid):
     return GenericGridFunction(grid, f, shape)
 
 
-def diff(f, ntuple, interpolant=Chebyshev, width=5, degree=None):
+def diff(f, ntuple, interpolant=Chebyshev, width=7, degree=None):
     '''
     diff(partial derivative) maps a grid function to a grid function of 
     the same shape. Derivative uses polynomial approximation with width 

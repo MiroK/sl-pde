@@ -1,14 +1,22 @@
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+from sympy import Add
 import numpy as np
 
 
-def linear_combination(coef, basis, ndigits=4):
+def linear_combination(coef, basis, ndigits=4, sort=False):
     '''Sum c_i * f_i'''
     assert len(coef) == len(basis)
-    expr = sum(c*f if abs(round(c, ndigits)) > 0 else 0 for c, f in zip(coef, basis))
-    return expr
+
+    cf_pairs = zip(coef, basis)
+
+    if sort:
+        cf_pairs = sorted(cf_pairs, key=lambda p: abs(p[0]), reverse=True)
+
+    args = (c*f if abs(round(c, ndigits)) > 0 else 0 for c, f in cf_pairs)
+    for arg in args:
+        print '\t', arg
 
 
 def plot_learning_curve(model, X, y):

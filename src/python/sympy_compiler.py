@@ -17,7 +17,7 @@ def compile_expr(expr, subs, grid=None, tx_coords=sp.symbols('t x y z')):
         if isinstance(expr, (int, float)):
             return expr
         # Eval and ask again
-        return compile_expr((int if expr.is_Inger else float)(expr), subs, grid)
+        return compile_expr((int if expr.is_Integer else float)(expr), subs, grid)
 
     # Atoms
     if not expr.args:
@@ -74,11 +74,11 @@ def compile_expr(expr, subs, grid=None, tx_coords=sp.symbols('t x y z')):
 
     # For a plus node we try to isolate what sympy could lamdify
     if isinstance(expr, sp.Add):
-        terms, lambdify_pieces = split(is_derivative_free, expr.args)
+        not_has_d, has_d = split(is_derivative_free, expr.args)
         # New sum expression for sympy joins the pile for compilation
-        terms.append(reduce(operator.add, lambdify_pieces))
+        has_d.append(reduce(operator.add, not_has_d))
         # Into grid functions
-        return apply_add(*[compile_expr(t, subs=subs, grid=grid) for t in terms])
+        return apply_add(*[compile_expr(t, subs=subs, grid=grid) for t in has_d])
 
     if isinstance(expr, sp.Mul):
         terms, lambdify_pieces = split(is_derivative_free, expr.args)
