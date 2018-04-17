@@ -52,9 +52,9 @@ def polynomials(vars, n):
 def Dt(f, order, t_var=sp.Symbol('t')):
     '''Expression for taking temporal derivative of f of order or up to [order]'''
     if isinstance(order, int):
-        return sp.Derivative(f, t)
+        return sp.Derivative(f, t_var, order)
 
-    return [Dt(f, o, t_var) for o in range(order[0]+1)]
+    return [Dt(f, t_var, o) for o in range(order[0]+1)]
 
 
 def Dx(f, dim, order, x_vars=sp.symbols('x y z')):
@@ -63,7 +63,7 @@ def Dx(f, dim, order, x_vars=sp.symbols('x y z')):
     of order or up to [order]
     ''' 
     if isinstance(order, int):
-        indices = [sum(map(list, zip(vars, index)), []) for index in multi_index(dim, order)]
+        indices = [sum(map(list, zip(x_vars, index)), []) for index in multi_index(dim, order)]
         return [sp.Derivative(f, *index) for index in indices]
 
     return sum((Dx(f, dim, o, x_vars) for o in range(order[0]+1)), [])
