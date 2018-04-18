@@ -8,7 +8,7 @@ import sympy as sp
 
 def is_number(n):
     '''A number value symbol '''
-    return isinstance(n, (int, float, type(sp.S(3))))
+    return isinstance(n, (int, float, sp.Number, sp.NumberSymbol))
 
 
 def is_dim_consistent(*grid_fs):
