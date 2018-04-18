@@ -1,6 +1,6 @@
 # Suppose you know the equation and the source?
-from grid_function import GridFunction
-from learn_utils import linear_combination, plot_learning_curve
+from grid_function import GridFunction, SpaceTimeCoordinate
+from learn_utils import compare, plot_learning_curve
 from streams import compile_stream
 from system_generation import polynomials, Dx
 
@@ -31,13 +31,14 @@ u_data = u_exact(T, X)
 
 # To build the model we sample the data (in interior indices) to get
 # the derivative right. For the rhs we keep it simple
-u_grid = GridFunction([t_domain, x_domain], u_data)
+grid = [t_domain, x_domain]
+u_grid = GridFunction(grid, u_data)
 
 equation = sp.Derivative(u, t) - u - sp.Derivative(u, x) - sp.Derivative(u, x, x)
 
 lhs_stream = compile_stream((equation, ), {u: u_grid})
 
-foos = (-t*x**2, t*x, t, x**2) + (sp.sin(x), sp.cos(x), sp.sin(t), sp.cos(t))
+foos = (-t*x**2, -2*t*x, -2*t, x**2)# + (sp.sin(x), sp.cos(x), sp.sin(t), sp.cos(t))
 #polynomials([x, t], 3)
 
 # Combine these guys
@@ -48,7 +49,12 @@ rhs_stream = compile_stream(columns, {u:u_grid})
 # A subset of this data is now used for training; where we can eval deriv
 # safely
 train_indices = map(tuple, np.random.choice(np.arange(5, n_samples-5), (n_train, 2)))
-print len(train_indices)
+
+true_rhs_stream = sp.lambdify((t, x), equation.subs(u, u_exact_expr).doit())
+tx = SpaceTimeCoordinate(grid)
+
+assert max(abs(sum(rhs_stream(p)) - true_rhs_stream(*tx(p))) < 1E-14
+           for p in train_indices)
 
 # Now build it
 lhs = np.array([lhs_stream(point) for point in train_indices])
@@ -65,4 +71,4 @@ plt.show()
 
 print (equation.subs(u, u_exact_expr).doit())
 
-linear_combination(lasso_reg.coef_, columns, sort=True)
+(lasso_reg.coef_, columns, sort=True)

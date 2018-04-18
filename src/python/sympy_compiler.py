@@ -49,9 +49,7 @@ def compile_expr(expr, subs, grid=None, tx_coords=sp.symbols('t x y z')):
     # FIXME: New we have a sympy expression which may or may not be free
     # of the derivatives. For the former we rely on sympy; otherwise there
     # is work to be done
-    print expr, is_derivative_free(expr)
     if is_derivative_free(expr):
-        print 'Applies', expr
         # Now we rely on sympys lambdify hoping that if does some optimizations
         vars = tuple(expr.free_symbols)
         # FIXME: However, for now the code gen should only use scalars
@@ -133,9 +131,7 @@ if __name__ == '__main__':
     compiled_expr = compile_expr(f**3 + f*sp.Derivative(f**2, x, y)**2 + f/3 + sp.sin(f), {f: grid_expr}, grid=grid)
     values[:] = compiled_expr(i_point)
 
-
-
-    # # Now take some derivative
+    # Now take some derivative
     df_expr = expr**3 + expr*(sp.Derivative(expr, x, y))**2 + expr/3 + sp.sin(expr)
 
     for i in range(10):

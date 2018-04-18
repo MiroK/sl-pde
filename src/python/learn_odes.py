@@ -70,7 +70,7 @@ for row, point in zip(rhs, train_indices):
 rhs = bmat([[rhs if i == j else None for i in range(n_eqs)] for j in range(n_eqs)])
 rhs = rhs.todense()
 
-lasso_reg = Lasso(alpha=2.5E-5)
+lasso_reg = Lasso(alpha=5.5E-5)
 
 plot_learning_curve(lasso_reg, rhs, lhs)
 plt.show()
@@ -81,6 +81,8 @@ print lasso_reg.coef_
 for eq in range(n_eqs):
     coef = lasso_reg.coef_[np.arange(eq*len(columns), (eq+1)*len(columns))]
     print 'd u_{%d} / dt =' % eq, linear_combination(coef, columns)
+
+
 
 # FIXME: scale features
 # TODO: extend to comples - then we could have systems which conserve energy
