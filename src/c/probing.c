@@ -26,10 +26,13 @@ int main(){
   }
 
   double time = 123.45;
-  
-  sprintf(path, "sine_0.vtk");  
-  probe_fields(probe, {foo, bar}, {field}, path, time);
 
-  sprintf(path, "isine_0.vtk");  
-  iprobe_fields(probe, {foo, bar}, {field}, path, time);
+  // Reduce in parallel and write on precess
+  // NOTE: vtk ending is added inside
+  sprintf(path, "sine_0");
+  // first flat if 1/0 for binary the other is 0/1 for mpi-reduction
+  probe_fields(probe, {foo}, {field}, path, time, 1, 0);
+  
+  //sprintf(path, "isine_0");  
+  //iprobe_fields(probe, {foo, bar}, {field}, path, time);
 }

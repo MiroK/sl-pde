@@ -4,6 +4,42 @@
 #include "grid/octree.h"
 #include "vtk.h"
 #include <math.h>
+#include <string.h>
+#include <stdio.h>
+
+/** copy the bytes at data into a double, reversing the
+    byte order, and return that.
+*/
+double reverseValue(const char *data)
+{
+	double result;
+ 
+	char *dest = (char *)&result;
+ 
+	for(int i=0; i<sizeof(double); i++) 
+	{
+		dest[i] = data[sizeof(double)-i-1];
+	}
+	return result;
+}
+ 
+/** Adjust the byte order from network to host.
+    On a big endian machine this is a NOP.
+	There is no error handling 
+*/
+double ntohd(double src)
+{
+#	if		!defined(__FLOAT_WORD_ORDER__) \
+		||	!defined(__ORDER_LITTLE_ENDIAN__)
+#		error "oops: unknown byte order"
+#	endif
+ 
+#	if __FLOAT_WORD_ORDER__ == __ORDER_LITTLE_ENDIAN__
+		return reverseValue((char *)&src);
+#	else
+		return src;
+#	endif
+}
 
 
 typedef struct {
@@ -46,10 +82,11 @@ void write_probedata_vtk(double** data,
   const double dy = (probe.ur.y - probe.ll.y)/(probe.ny-1);
   const double dz = (probe.ur.z - probe.ll.z)/(probe.nz-1);
   
-  double x, y, z;
+  char vtk_path[256]; // add rank info
+  sprintf(vtk_path, "%s_%d.vtk", path, pid());
   
   FILE* fp;
-  fp = fopen(path, "w");
+  fp = fopen(vtk_path, "w");
 
   char timestamp[256];
   sprintf(timestamp, "time %.16f", time);
@@ -57,21 +94,10 @@ void write_probedata_vtk(double** data,
   fprintf(fp, "# vtk DataFile Version 2.0\n");
   fprintf(fp, "Basilisk %s\n", timestamp);
   fprintf(fp, "ASCII\n");
-  fprintf(fp, "DATASET STRUCTURED_GRID\n");
+  fprintf(fp, "DATASET STRUCTURED_POINTS\n");
   fprintf(fp, "DIMENSIONS %d %d %d\n", probe.nx, probe.ny, probe.nz);
-  fprintf(fp, "POINTS %d double\n", ncols);
-
-  for(int k = 0; k < probe.nz; k++){
-    z = probe.ll.z + k*dz;
-    for(int j = 0; j < probe.ny; j++){
-      y = probe.ll.y + j*dy;
-      for(int i = 0; i < probe.nx; i++){
-        x = probe.ll.x + i*dx;
-
-        fprintf (fp, "%.16f %.16f %.16f\n", x, y, z);
-      }
-    }
-  }
+  fprintf(fp, "ORIGIN %.16f %.16f %.16f\n", probe.ll.x, probe.ll.y, probe.ll.z);
+  fprintf(fp, "SPACING %.16f %.16f %.16f\n", dx, dy, dz);
 
   fprintf (fp, "POINT_DATA %d\n", ncols);
   
@@ -96,12 +122,83 @@ void write_probedata_vtk(double** data,
   fclose(fp);
 }
 
+
+void write_probedata_vtk_bin(double** data,
+                             Probe probe,
+                             scalar* scalar_fields,
+                             vector* vector_fields,
+                             char* path,
+                             double time){
+  int nrows = 0;
+  for(scalar field in scalar_fields){
+    nrows += 1;
+  }
+
+  for(vector field in vector_fields){
+    nrows += 3;
+  }
+
+  int ncols = probe.nx*probe.ny*probe.nz;
+
+  const double dx = (probe.ur.x - probe.ll.x)/(probe.nx-1);
+  const double dy = (probe.ur.y - probe.ll.y)/(probe.ny-1);
+  const double dz = (probe.ur.z - probe.ll.z)/(probe.nz-1);
+  
+  char vtk_path[256]; // add rank info
+  sprintf(vtk_path, "%s_%d.vtk", path, pid());
+  
+  FILE* fp;
+  fp = fopen(vtk_path, "wb");
+
+  char timestamp[256];
+  sprintf(timestamp, "time %.16f", time);
+  
+  fprintf(fp, "# vtk DataFile Version 2.0\n");
+  fprintf(fp, "Basilisk %s\n", timestamp);
+  fprintf(fp, "BINARY\n");
+  fprintf(fp, "DATASET STRUCTURED_POINTS\n");
+  fprintf(fp, "DIMENSIONS %d %d %d\n", probe.nx, probe.ny, probe.nz);
+  fprintf(fp, "ORIGIN %.16f %.16f %.16f\n", probe.ll.x, probe.ll.y, probe.ll.z);
+  fprintf(fp, "SPACING %.16f %.16f %.16f\n", dx, dy, dz);
+
+  fprintf (fp, "POINT_DATA %d\n", ncols);
+
+  double endian_value = -1;
+  
+  int row_index = 0;
+  for(scalar field in scalar_fields){
+    fprintf (fp, "SCALARS %s double\n", field.name);
+    fputs ("LOOKUP_TABLE default\n", fp);
+    for(int col=0; col<ncols; col++){
+      endian_value = ntohd(data[row_index][col]);
+      fwrite(&endian_value, sizeof(double), 1, fp);
+    }
+    row_index += 1;
+  }
+
+  for(vector field in vector_fields){
+    fprintf (fp, "VECTORS %s double\n", field.x.name);
+    for(int col=0; col<ncols; col++){
+      for(int component=0; component<3; component++){
+        endian_value = ntohd(data[row_index+component][col]);
+        fwrite(&endian_value, sizeof(double), 1, fp);
+      }
+    }
+    row_index += 3;
+  }
+  fflush (fp);
+  fclose(fp);
+}
+
+
 trace
 void probe_fields(Probe probe,
                   scalar* scalar_fields,
                   vector* vector_fields,
                   char* path,
-                  double time){
+                  double time,
+                  int write_binary,
+                  int mpi_reduce){
   /*
     Here the value of the field is computed by taking the cell value 
     at a cell which contains the probe points. This allows reusing the 
@@ -168,23 +265,40 @@ void probe_fields(Probe probe,
 
   // We perform reduction on 0 node. Note that if the point was no found
   // we have nodata(HUGE) on cpu. MPI_MIN syncs things
-  if (pid() == 0){
-    for(int row=0; row<nrows; row++){
-      MPI_Reduce(MPI_IN_PLACE, data[row], ncols, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-    }
+  if(mpi_reduce == 1){
+    if (pid() == 0){
+      for(int row=0; row<nrows; row++){
+        MPI_Reduce(MPI_IN_PLACE, data[row], ncols, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+      }
   }
-  else{
-    for(int row=0; row<nrows; row++){
-      MPI_Reduce(data[row], data[row], ncols, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-    }
+    else{
+      for(int row=0; row<nrows; row++){
+        MPI_Reduce(data[row], data[row], ncols, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+      }
   }
 
-  // Write data to one VTK file on root - the one process that should have
-  // the right values
-  if(pid() == 0){
-    write_probedata_vtk(data, probe, scalar_fields, vector_fields, path, time);
+    // Write data to one VTK file on root - the one process that should have
+    // the right values
+    if(pid() == 0){
+      if(write_binary == 0){
+        write_probedata_vtk(data, probe, scalar_fields, vector_fields, path, time);
+      }
+      else{
+        write_probedata_vtk_bin(data, probe, scalar_fields, vector_fields, path, time);
+      } 
+    }
   }
-  
+  // Let every process dump it's data (reduction is done in the postprocessing)
+  else{
+      if(write_binary == 0){
+        write_probedata_vtk(data, probe, scalar_fields, vector_fields, path, time);
+      }
+      else{
+        write_probedata_vtk_bin(data, probe, scalar_fields, vector_fields, path, time);
+      } 
+  }
+
+  // Free
   for(int i=0; i<nrows; i++){
     free(data[i]);
   }
