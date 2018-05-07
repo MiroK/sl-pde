@@ -177,7 +177,7 @@ void write_probedata_vtk_bin(double** data,
   }
 
   for(vector field in vector_fields){
-    fprintf (fp, "VECTORS %s double\n", field.x.name);
+    fprintf (fp, "\nVECTORS %s double\n", field.x.name);
     for(int col=0; col<ncols; col++){
       for(int component=0; component<3; component++){
         endian_value = ntohd(data[row_index+component][col]);
@@ -270,12 +270,12 @@ void probe_fields(Probe probe,
       for(int row=0; row<nrows; row++){
         MPI_Reduce(MPI_IN_PLACE, data[row], ncols, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
       }
-  }
+    }
     else{
       for(int row=0; row<nrows; row++){
         MPI_Reduce(data[row], data[row], ncols, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
       }
-  }
+    }
 
     // Write data to one VTK file on root - the one process that should have
     // the right values
@@ -310,7 +310,10 @@ void iprobe_fields(Probe probe,
                    scalar* scalar_fields,
                    vector* vector_fields,
                    char* path,
-                   double time){
+                   double time,
+                   int write_binary,
+                   int mpi_reduce){
+
   /*
     Here the value of the field is computed by interpolation. It should be 
     more accurate but also expensive.
@@ -393,21 +396,37 @@ void iprobe_fields(Probe probe,
 
   // We perform reduction on 0 node. Note that if the point was no found
   // we have nodata(HUGE) on cpu. MPI_MIN syncs things
-  if (pid() == 0){
-    for(int row=0; row<nrows; row++){
-      MPI_Reduce(MPI_IN_PLACE, data[row], ncols, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+  if(mpi_reduce == 1){
+    if (pid() == 0){
+      for(int row=0; row<nrows; row++){
+        MPI_Reduce(MPI_IN_PLACE, data[row], ncols, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+      }
     }
-  }
-  else{
-    for(int row=0; row<nrows; row++){
-      MPI_Reduce(data[row], data[row], ncols, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+    else{
+      for(int row=0; row<nrows; row++){
+        MPI_Reduce(data[row], data[row], ncols, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+      }
     }
-  }
 
-  // Write data to one VTK file on root - the one process that should have
-  // the right values
-  if(pid() == 0){
-    write_probedata_vtk(data, probe, scalar_fields, vector_fields, path, time);
+    // Write data to one VTK file on root - the one process that should have
+    // the right values
+    if(pid() == 0){
+      if(write_binary == 0){
+        write_probedata_vtk(data, probe, scalar_fields, vector_fields, path, time);
+      }
+      else{
+        write_probedata_vtk_bin(data, probe, scalar_fields, vector_fields, path, time);
+      } 
+    }
+  }
+  // Let every process dump it's data (reduction is done in the postprocessing)
+  else{
+      if(write_binary == 0){
+        write_probedata_vtk(data, probe, scalar_fields, vector_fields, path, time);
+      }
+      else{
+        write_probedata_vtk_bin(data, probe, scalar_fields, vector_fields, path, time);
+      } 
   }
   
   for(int i=0; i<nrows; i++){
