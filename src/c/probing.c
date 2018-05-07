@@ -15,39 +15,47 @@ int main(){
   // Quite large!
   init_grid(1 << 6);
 
-  foreach(){
-    field.x[] = x;
-    field.y[] = -y;
-    field.z[] = 2*z;
-
-    pos.x[] = x;
-    pos.y[] = y;
-    pos.z[] = z;
-
-    foo[] = x + y + z;
-    bar[] = x + 2*y + 3*z;
-  }
-
-  double time = 123.45;
-
-  // NOTE: vtk ending is added inside
-  // first flat if 1/0 for binary the other is 0/1 for mpi-reduction
-  // first flat if 1/0 for binary the other is 0/1 for mpi-reduction
+  double dt = 0.123;
+  double time = 0;
+  int t_index = 0;
   
-  // NOTE: we store the data as structured points. When we query the function
-  // the for interpolation the value we get is the one at the query point.
-  // But othewise it's the value at center node of the cell. So WITOUT
-  // interpolation we have error in the position
-  sprintf(path, "sine_bin_0");
-  probe_fields(probe, {foo, bar}, {field, pos}, path, time, 1, 0);
+  while(time < 2){
 
-  sprintf(path, "sine_0");
-  probe_fields(probe, {foo, bar}, {field, pos}, path, time, 0, 0);
+    foreach(){
+      field.x[] = x*time;
+      field.y[] = -y*time*2;
+      field.z[] = 2*z-time;
+
+      pos.x[] = x+time;
+      pos.y[] = y+2*time;
+      pos.z[] = z-time;
+
+      foo[] = x + y*time + z;
+      bar[] = x+time + 2*y + 3*z;
+    }
+
+    // NOTE: vtk ending is added inside
+    // first flat if 1/0 for binary the other is 0/1 for mpi-reduction
+    // first flat if 1/0 for binary the other is 0/1 for mpi-reduction
+  
+    // NOTE: we store the data as structured points. When we query the function
+    // the for interpolation the value we get is the one at the query point.
+    // But othewise it's the value at center node of the cell. So WITOUT
+    // interpolation we have error in the position
+    sprintf(path, "sine_bin_%d", t_index);
+    probe_fields(probe, {foo, bar}, {field, pos}, path, time, 1, 0);
+
+    sprintf(path, "sine_%d", t_index);
+    probe_fields(probe, {foo, bar}, {field, pos}, path, time, 0, 0);
 
   // Exact
-  sprintf(path, "isine_bin_0");
-  iprobe_fields(probe, {foo, bar}, {field, pos}, path, time, 1, 0);
+    sprintf(path, "isine_bin_%d", t_index);
+    iprobe_fields(probe, {foo, bar}, {field, pos}, path, time, 1, 0);
 
-  sprintf(path, "isine_0");
-  iprobe_fields(probe, {foo, bar}, {field, pos}, path, time, 0, 0);
+    sprintf(path, "isine_%d", t_index);
+    iprobe_fields(probe, {foo, bar}, {field, pos}, path, time, 0, 0);
+    
+    t_index += 1;
+    time += dt;
+  }
 }
