@@ -33,6 +33,9 @@ int main(){
       foo[] = x + y*time + z;
       bar[] = x+time + 2*y + 3*z;
     }
+    // NOTE: This is crucial to update ghose values for cpu boundaries
+    // and thus for gettin the interpolation right
+    boundary({foo, bar, pos, field});
 
     // NOTE: vtk ending is added inside
     // first flat if 1/0 for binary the other is 0/1 for mpi-reduction
