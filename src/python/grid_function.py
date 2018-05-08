@@ -4,7 +4,10 @@
 # over the domain which can be evaluated, combined (+, -) and differentaited.
 
 from numpy.polynomial.chebyshev import Chebyshev
+from probe_io import (read_time, read_spatial_grid, read_probe_data,
+                      write_structured_points)
 import numpy as np
+import os
 
 
 class GenericGridFunction(object):
@@ -33,17 +36,21 @@ class GenericGridFunction(object):
 class GridFunction(GenericGridFunction):
     '''Grid function constructed from data over grid'''
     def __init__(self, grid, data):
+        # Reference to data for storing
+        self.data = data
+
         # A single npdarry is a scalar.
         if isinstance(data, np.ndarray):
             GenericGridFunction.__init__(self, grid, f=lambda p: data[p], value_shape=())
             return None
-        
+
         assert len(data) > 1  # Don't want len 1 vectors, or row vectors?
         # Everything else not is a tenseor valued
 
         # Now all the components mush mathch the grid shape
         def is_consistent(d, grid=grid):
             dim, sizes = len(grid), map(len, grid)
+            print d, dim, sizes
             if isinstance(d, np.ndarray):
                 return dim == len(d.shape) and sizes == list(d.shape)
 
@@ -75,7 +82,33 @@ class GridFunction(GenericGridFunction):
             return y
 
         GenericGridFunction.__init__(self, grid, f, value_shape)
+        
+    def write(self, output, varname='', write_binary=True):
+        '''Preliminary write the probe as VTK structured points'''
+        base, ext = os.path.splitext(output)
+        assert ext == '.vtk'
+        
+        time, grid = self.grid[0], self.grid[1:]
 
+        header_data = {'origin': tuple(g[0] for g in grid),
+                       'sizes': tuple(map(len, grid)),
+                       'spacing': tuple((g[1] - g[0]) for g in grid),
+                       'time': None}
+
+        key = 'scalars' if self.value_shape == () else 'vectors'
+        print key, self.value_shape
+        data = {key: {}}
+
+        if not varname: varname = os.path.basename(base)
+        
+        for i, t in enumerate(time):
+            out = '_'.join([base, str(i)]) + ext
+
+            header_data['time'] = t
+            data[key][varname] = self.data[i]
+
+            write_structured_points(out, header_data, data, write_binary)
+        
 
 def Coordinate(grid, i):
     '''Grid function for i'th coordinate'''
@@ -215,3 +248,67 @@ def diff(f, ntuple, interpolant=Chebyshev, width=7, degree=None):
         # For other directions we use the derivatives
         func = diff_func(func=func, i=index, n=power)
     return func
+
+
+def grid_from_data(files):
+    '''Space time grid for the files'''
+    # Orient time axis
+    time_axis, files = list(zip(*sorted(zip(map(read_time, files), files), key=lambda p: p[0])))
+
+    # Grid consistency
+    space_grid = read_spatial_grid(files[0])
+    assert all(space_grid == read_spatial_grid(f) for f in files)
+
+    grid = [list(time_axis)] + space_grid
+    return grid
+
+
+def grid_function_from_data(files, var, split=True):
+    '''
+    Let each file represent a t-slice. Build a function on the space 
+    time cylinder. NOTE: each tensor can be broken into components.
+    '''
+    grid = grid_from_data(files)
+    
+    # Consistency of data
+    dtype, var = var
+    assert dtype in ('vector', 'scalar')
+
+    if dtype == 'scalar':
+        extract = lambda f: read_probe_data(f, scalars=(var, ))['scalars'][var]
+    else:
+        extract = lambda f: read_probe_data(f, vectors=(var, ))['vectors'][var]
+
+    data = map(extract, files)
+    shape,  = set(d.shape for d in data)
+    # (Npoints, ) or (Npoints, nscalar components)
+    data = np.array(data)
+    if len(shape) == 1:
+        return (GridFunction(grid, data), )
+
+    ncomps = np.prod(shape[1:])        
+    data = [data[:, :, i] for i in range(ncomps)]
+
+    if not split:
+        return (GridFunction(grid, data), )
+
+    # Scalar components
+    return (GridFunction(grid, d) for d in data)
+        
+# --------------------------------------------------------------------
+
+if __name__ == '__main__':
+    import os
+
+    dir = './results'
+    files = [os.path.join(dir, f)
+             for f in os.listdir(dir) if f.startswith('isine') and 'bin' not in f ]
+
+    f,  = grid_function_from_data(files, var=('scalar', 'foo'))
+
+    pos_x, pos_y, pos_z = grid_function_from_data(files, var=('vector', 'pos.x'))
+
+    f.write('foo_bar.vtk', write_binary=False)
+
+    #pos,  = grid_function_from_data(files, var=('vector', 'pos.x'), split=False)
+    #pos.write('foo_bar.vtk', write_binary=False)

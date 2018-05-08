@@ -87,7 +87,7 @@ def minimum(*arrays):
     return minimum(*((minimum(arrays[0], arrays[1]), ) + arrays[2:]))
 
 
-def merge_mpi_vtk(files, result_dir):
+def merge_mpi_vtk(files, result_dir, write_binary=True):
     '''
     VTK files could have been written on several CPUs having HUGE as a 
     value for points which didn't belong to the process. Merge does equivalent
@@ -117,43 +117,60 @@ def merge_mpi_vtk(files, result_dir):
                     for var in datas[0][tensor]}
         merged_data[tensor] = vec_data
 
-    # Data for grid
-    origin = tuple(g[0] for g in grid)
-    sizes = tuple(map(len, grid))
-    spacing = tuple(g[1] - o for g, o in zip(grid, origin))
+    # Data
+    header_data = {'origin': tuple(g[0] for g in grid),
+                   'sizes': tuple(map(len, grid)),
+                   'spacing': tuple((g[1] - g[0]) for g in grid),
+                   'time': time}
 
-    # FIXME: I can't get this work properly with vtk so we write manually
     out = os.path.join(result_dir, os.path.basename(files[0]))
+
+    write_structured_points(out, header_data, merged_data, write_binary)
+    
+    return 'Merged %r to %s' % (files, out)
+
+
+def write_structured_points(out, header_data, data, write_binary=True):
+    '''Save as VTK's structured points'''
+    # FIXME: I can't get this work properly with vtk so we write manually
     with open(out, 'wb') as f:
         f.write('# vtk DataFile Version 2.0\n')
-        f.write('Basilisk %s\n' % time)
-        f.write('BINARY\n')
+        f.write('Basilisk %.16f\n' % header_data['time'])
+        f.write('BINARY\n' if write_binary else 'ASCII\n')
         f.write('DATASET STRUCTURED_POINTS\n')
-        f.write('DIMENSIONS %d %d %d\n' % sizes)
-        f.write('ORIGIN %.16f %.16f %.16f\n' % origin)
-        f.write('SPACING %.16f %.16f %.16f\n' % spacing)
+        f.write('DIMENSIONS %d %d %d\n' % header_data['sizes'])
+        f.write('ORIGIN %.16f %.16f %.16f\n' % header_data['origin'])
+        f.write('SPACING %.16f %.16f %.16f\n' % header_data['spacing'])
 
-        f.write('POINT_DATA %d\n' % np.prod(sizes))
+        f.write('POINT_DATA %d\n' % np.prod(header_data['sizes']))
         
-        if 'scalars' in merged_data:
-            for var in merged_data['scalars']:
-                values = merged_data['scalars'][var]
+        if 'scalars' in data:
+            for var in data['scalars']:
+                values = data['scalars'][var]
                 f.write('SCALARS %s double\n' % var)
                 f.write('LOOKUP_TABLE defaults\n')
-                # Bigendian
-                values.astype(values.dtype.newbyteorder('>')).tofile(f, sep='')
-                #for v in values:
-                #    f.write('%.16f\n' % v)
+
+                if write_binary:
+                    values.astype(values.dtype.newbyteorder('>')).tofile(f, sep='')  # Bigendian
+                else:
+                    for v in values: f.write('%.16f\n' % v)
         f.write('\n')
         
-        if 'vectors' in merged_data:
-            for var in merged_data['vectors']:
-                values = merged_data['vectors'][var]
+        if 'vectors' in data:
+            for var in data['vectors']:
+                values = data['vectors'][var]
+                npoints, ncomps = values.shape
+                assert 1 < ncomps < 4
+                if ncomps == 2:
+                    values = np.c_[values, np.zeros(npoints)]
+                
                 f.write('VECTORS %s double\n' % var)
 
-                values.astype(values.dtype.newbyteorder('>')).tofile(f, sep='')
+                if write_binary:
+                    values.astype(values.dtype.newbyteorder('>')).tofile(f, sep='')
+                else:
+                    for v in values: f.write('%.16f %.16f %.16f\n' % tuple(v))
         f.write('\n')
-    return 'Merged %r to %s' % (files, out)
 
 # -------------------------------------------------------------------
 
