@@ -4,3 +4,8 @@
     - `/src/c` is the C code related to Basilisk data generation
     - `/src/python` is the python code for data generation in FEniCS and sparse learning
 
+*** TODO
+    - Handle (by Coordinate transforms?) learning in different coordinates?
+    - If there data is large we want to 'schedule' how the linear system is built
+    - Get up to speed with different regressors
+    - Neural net approaches  

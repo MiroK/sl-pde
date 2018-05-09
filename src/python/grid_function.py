@@ -6,6 +6,8 @@
 from numpy.polynomial.chebyshev import Chebyshev
 from probe_io import (read_time, read_spatial_grid, read_probe_data,
                       write_structured_points)
+import utils
+
 import numpy as np
 import os
 
@@ -50,7 +52,6 @@ class GridFunction(GenericGridFunction):
         # Now all the components mush mathch the grid shape
         def is_consistent(d, grid=grid):
             dim, sizes = len(grid), map(len, grid)
-            print d, dim, sizes
             if isinstance(d, np.ndarray):
                 return dim == len(d.shape) and sizes == list(d.shape)
 
@@ -95,8 +96,13 @@ class GridFunction(GenericGridFunction):
                        'spacing': tuple((g[1] - g[0]) for g in grid),
                        'time': None}
 
-        key = 'scalars' if self.value_shape == () else 'vectors'
-        print key, self.value_shape
+        if self.value_shape == ():
+            key = 'scalars'
+            collapse = lambda i: (self.data[i]).flatten(order='F')    
+        else:
+            key = 'vectors'
+            collapse = lambda i: np.column_stack([d[i].flatten(order='F') for d in self.data])
+            
         data = {key: {}}
 
         if not varname: varname = os.path.basename(base)
@@ -105,13 +111,16 @@ class GridFunction(GenericGridFunction):
             out = '_'.join([base, str(i)]) + ext
 
             header_data['time'] = t
-            data[key][varname] = self.data[i]
+            data[key][varname] = collapse(i)
 
             write_structured_points(out, header_data, data, write_binary)
         
 
 def Coordinate(grid, i):
     '''Grid function for i'th coordinate'''
+    # Handle files:
+    if utils.eltype(grid) == str: grid = grid_from_data(grid)
+        
     assert 0 <= i < len(grid)
     shape = ()  # A scalar
     f = lambda p, grid=grid[i], i=i: grid[p[i]]
@@ -120,6 +129,9 @@ def Coordinate(grid, i):
 
 def SpaceTimeCoordinate(grid):
     '''Vector in space time index -> physical'''
+    # Handle files:
+    if utils.eltype(grid) == str: grid = grid_from_data(grid)
+
     if len(grid) == 1:
         shape = ()
     else:
@@ -135,6 +147,8 @@ def TemporalCoordinate(grid):
 
 def SpatialCoordinate(grid):
     '''Spatial axes'''
+    if utils.eltype(grid) == str: grid = grid_from_data(grid)
+
     assert len(grid) > 1
 
     if len(grid) == 2:
@@ -149,6 +163,62 @@ def SpatialCoordinate(grid):
     
     return GenericGridFunction(grid, f, shape)
 
+
+def grid_from_data(files):
+    '''Space time grid for the files. NOTE axling files'''
+    # Orient time axis
+    times = map(read_time, files)
+    times.sort()
+
+    files.sort(key=read_time)
+
+    # Grid consistency
+    space_grid = read_spatial_grid(files[0])
+    assert all(space_grid == read_spatial_grid(f) for f in files)
+
+    grid = [times] + space_grid
+    return grid
+
+
+def grid_function_from_data(files, var, split=True):
+    '''
+    Let each file represent a t-slice. Build a function on the space 
+    time cylinder. NOTE: each tensor can be broken into components.
+    '''
+    grid = grid_from_data(files)
+
+    # Consistency of data
+    dtype, var = var
+    assert dtype in ('vector', 'scalar')
+
+    if dtype == 'scalar':
+        extract = lambda f: read_probe_data(f, scalars=(var, ))['scalars'][var]
+    else:
+        extract = lambda f: read_probe_data(f, vectors=(var, ))['vectors'][var]
+
+    data = map(extract, files)
+    shape,  = set(d.shape for d in data)
+    space_grid_shape = tuple(map(len, grid[1:]))
+    # (Npoints, ) or (Npoints, nscalar components)
+    
+    if len(shape) == 1:
+        # Reshape
+        data = np.array([d.reshape(space_grid_shape, order='F') for d in data])
+        return (GridFunction(grid, data), )
+    
+    ncomps = np.prod(shape[1:])
+    # Reshape vector component on each time slice
+    data = [np.array([d[:, i].reshape(space_grid_shape, order='F') for d in data])
+            for i in range(ncomps)]
+
+    # Keep as vector
+    if not split:
+        return (GridFunction(grid, data), )
+
+    # Scalar components
+    return (GridFunction(grid, d) for d in data)
+
+# DIFFING ---
 
 def diff(f, ntuple, interpolant=Chebyshev, width=7, degree=None):
     '''
@@ -249,51 +319,6 @@ def diff(f, ntuple, interpolant=Chebyshev, width=7, degree=None):
         func = diff_func(func=func, i=index, n=power)
     return func
 
-
-def grid_from_data(files):
-    '''Space time grid for the files'''
-    # Orient time axis
-    time_axis, files = list(zip(*sorted(zip(map(read_time, files), files), key=lambda p: p[0])))
-
-    # Grid consistency
-    space_grid = read_spatial_grid(files[0])
-    assert all(space_grid == read_spatial_grid(f) for f in files)
-
-    grid = [list(time_axis)] + space_grid
-    return grid
-
-
-def grid_function_from_data(files, var, split=True):
-    '''
-    Let each file represent a t-slice. Build a function on the space 
-    time cylinder. NOTE: each tensor can be broken into components.
-    '''
-    grid = grid_from_data(files)
-    
-    # Consistency of data
-    dtype, var = var
-    assert dtype in ('vector', 'scalar')
-
-    if dtype == 'scalar':
-        extract = lambda f: read_probe_data(f, scalars=(var, ))['scalars'][var]
-    else:
-        extract = lambda f: read_probe_data(f, vectors=(var, ))['vectors'][var]
-
-    data = map(extract, files)
-    shape,  = set(d.shape for d in data)
-    # (Npoints, ) or (Npoints, nscalar components)
-    data = np.array(data)
-    if len(shape) == 1:
-        return (GridFunction(grid, data), )
-
-    ncomps = np.prod(shape[1:])        
-    data = [data[:, :, i] for i in range(ncomps)]
-
-    if not split:
-        return (GridFunction(grid, data), )
-
-    # Scalar components
-    return (GridFunction(grid, d) for d in data)
         
 # --------------------------------------------------------------------
 
@@ -304,11 +329,23 @@ if __name__ == '__main__':
     files = [os.path.join(dir, f)
              for f in os.listdir(dir) if f.startswith('isine') and 'bin' not in f ]
 
+    point = (1, 1, 1, 1)
+    tx = SpaceTimeCoordinate(files)
+    t, x, y, z = tx(point)
+    print 't, x, y, z', t, x, y, z
+    
     f,  = grid_function_from_data(files, var=('scalar', 'foo'))
+    print f(point), x + y*t + z
+    print 'f shape', f.value_shape
 
     pos_x, pos_y, pos_z = grid_function_from_data(files, var=('vector', 'pos.x'))
+    print pos_x(point), pos_y(point), pos_z(point), '|', x+t, y+2*t, z-t
+    print 'pos_x shape', pos_x.value_shape
+    
+    pos,  = grid_function_from_data(files, var=('vector', 'pos.x'), split=False)
+    print pos(point), [x+t, y+2*t, z-t]
+    print 'pos shape', pos.value_shape
+    
+    f.write('foo_bar.vtk', write_binary=True)
 
-    f.write('foo_bar.vtk', write_binary=False)
-
-    #pos,  = grid_function_from_data(files, var=('vector', 'pos.x'), split=False)
-    #pos.write('foo_bar.vtk', write_binary=False)
+    pos.write('foo_bar_vec.vtk', write_binary=True)
